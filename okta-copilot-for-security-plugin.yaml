@@ -1,0 +1,206 @@
+openapi: 3.1.0
+info:
+  title: Okta Security API
+  description: This API allows access to Okta user activities, authentication logs, and security events for security automation and monitoring.
+  version: 1.0.0
+servers:
+  - url: https://{oktaDomain}/api/v1
+    description: Okta API Server
+    variables:
+      oktaDomain:
+        default: your-okta-domain.okta.com
+        description: Your Okta domain
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: Okta OAuth 2.0 authentication using the authorization code flow.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://{oktaDomain}/oauth2/default/v1/authorize
+          tokenUrl: https://{oktaDomain}/oauth2/default/v1/token
+          scopes:
+            okta.logs.read: "Read access to security logs"
+            okta.users.read: "Read access to user details and sessions"
+  responses:
+    UnauthorizedError:
+      description: Unauthorized request, OAuth token invalid or missing.
+paths:
+  /logs:
+    get:
+      operationId: getSecurityLogs
+      summary: Retrieve security logs from Okta
+      description: This endpoint retrieves security-related logs, including user authentication activities, login failures, and account lockouts.
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Retrieve logs since a specific date-time (ISO 8601 format).
+        - name: until
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Retrieve logs until a specific date-time (ISO 8601 format).
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter logs by event type, status, or user (e.g., "eventType eq 'user.session.start'").
+      security:
+        - oauth2:
+            - okta.logs.read
+      responses:
+        '200':
+          description: Security logs retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    eventType:
+                      type: string
+                      description: Type of security event (e.g., login, password reset).
+                    published:
+                      type: string
+                      format: date-time
+                      description: Time when the event was recorded.
+                    actor:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: ID of the user or system responsible for the event.
+                        type:
+                          type: string
+                        displayName:
+                          type: string
+                          description: User or system name responsible for the event.
+                    outcome:
+                      type: object
+                      properties:
+                        result:
+                          type: string
+                          description: Outcome of the security event (e.g., SUCCESS, FAILURE).
+                        reason:
+                          type: string
+                          description: Reason for the result, if applicable.
+                    client:
+                      type: object
+                      properties:
+                        userAgent:
+                          type: string
+                          description: Browser or system user agent responsible for the request.
+                        ipAddress:
+                          type: string
+                          description: IP address of the client making the request.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /users/{userId}/sessions:
+    get:
+      operationId: getUserSessions
+      summary: Retrieve active sessions for a specific user
+      description: This endpoint retrieves all active Okta sessions for the specified user, providing information about login times and client details.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The Okta ID of the user whose sessions are to be retrieved.
+      security:
+        - oauth2:
+            - okta.users.read
+      responses:
+        '200':
+          description: Successfully retrieved active sessions for the user.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: Session ID.
+                    login:
+                      type: string
+                      description: User login name.
+                    status:
+                      type: string
+                      description: Status of the session (e.g., ACTIVE, EXPIRED).
+                    lastLogin:
+                      type: string
+                      format: date-time
+                      description: The last time the user logged in.
+                    expiresAt:
+                      type: string
+                      format: date-time
+                      description: When the session is set to expire.
+                    client:
+                      type: object
+                      properties:
+                        ipAddress:
+                          type: string
+                          description: IP address of the client.
+                        userAgent:
+                          type: string
+                          description: Client user agent responsible for the session.
+  /users/{userId}:
+    get:
+      operationId: getUserDetails
+      summary: Retrieve details for a specific user
+      description: This endpoint provides detailed information about a specific Okta user, including status, profile, and registration information.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The Okta ID of the user whose details are to be retrieved.
+      security:
+        - oauth2:
+            - okta.users.read
+      responses:
+        '200':
+          description: User details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: User ID.
+                  status:
+                    type: string
+                    description: Status of the user (e.g., ACTIVE, SUSPENDED).
+                  created:
+                    type: string
+                    format: date-time
+                    description: Date and time the user was created.
+                  profile:
+                    type: object
+                    properties:
+                      firstName:
+                        type: string
+                        description: User's first name.
+                      lastName:
+                        type: string
+                        description: User's last name.
+                      email:
+                        type: string
+                        description: User's email address.
+                      login:
+                        type: string
+                        description: User's login username.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
